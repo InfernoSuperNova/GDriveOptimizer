@@ -1,0 +1,155 @@
+{
+  "version": 1,
+  "dependencies": {
+    ".NETFramework,Version=v4.8": {
+      "HarmonyX": {
+        "type": "Direct",
+        "requested": "[2.14.0, )",
+        "resolved": "2.14.0",
+        "contentHash": "ZxfuszLYwbSEEUuy/ifXUrL+kwvt7CNahzUFS12zABeBMwdWG5vdthk1XRMdZlg2aRjhRSAwuKlDMD3Bmao/Ew==",
+        "dependencies": {
+          "MonoMod.RuntimeDetour": "25.2.2"
+        }
+      },
+      "Microsoft.NETFramework.ReferenceAssemblies": {
+        "type": "Direct",
+        "requested": "[1.0.3, )",
+        "resolved": "1.0.3",
+        "contentHash": "vUc9Npcs14QsyOD01tnv/m8sQUnGTGOw1BCmKcv77LBJY7OxhJ+zJF7UD/sCL3lYNFuqmQEVlkfS4Quif6FyYg==",
+        "dependencies": {
+          "Microsoft.NETFramework.ReferenceAssemblies.net48": "1.0.3"
+        }
+      },
+      "PolySharp": {
+        "type": "Direct",
+        "requested": "[1.*, )",
+        "resolved": "1.15.0",
+        "contentHash": "FbU0El+EEjdpuIX4iDbeS7ki1uzpJPx8vbqOzEtqnl1GZeAGJfq+jCbxeJL2y0EPnUNk8dRnnqR2xnYXg9Tf+g=="
+      },
+      "PropertyChanged.Fody": {
+        "type": "Direct",
+        "requested": "[4.*, )",
+        "resolved": "4.1.0",
+        "contentHash": "6v+f9cI8YjnZH2WBHuOqWEAo8DFFNGFIdU8xD3AsL6fhV6Y8oAmVWd7XKk49t8DpeUBwhR/X+97+6Epvek0Y3A==",
+        "dependencies": {
+          "Fody": "6.6.4"
+        }
+      },
+      "Torch.Server.ReferenceAssemblies": {
+        "type": "Direct",
+        "requested": "[1.3.*-master*, )",
+        "resolved": "1.3.1.303-master",
+        "contentHash": "R2libnyZ6+moFAcj04jSPqHpQRQ6RWSqz3TfS7GkfxwurpAKq1gbEVJIBSsaYZsXL6GgoTNVMeIyzmU3ycp2Bg==",
+        "dependencies": {
+          "SpaceEngineersDedicated.ReferenceAssemblies": "1.205.23",
+          "Torch.Server": "1.3.1.303-master"
+        }
+      },
+      "Fody": {
+        "type": "Transitive",
+        "resolved": "6.6.4",
+        "contentHash": "vLZS+oa+ndUHYPlx/8n9bBTT3dHkCF0riml4paKq4D663+cZd47x1uagQo32D/gKFZ/sfmV1oqKaLmH0elxq4A=="
+      },
+      "Microsoft.NETFramework.ReferenceAssemblies.net48": {
+        "type": "Transitive",
+        "resolved": "1.0.3",
+        "contentHash": "zMk4D+9zyiEWByyQ7oPImPN/Jhpj166Ky0Nlla4eXlNL8hI/BtSJsgR8Inldd4NNpIAH3oh8yym0W2DrhXdSLQ=="
+      },
+      "Mono.Cecil": {
+        "type": "Transitive",
+        "resolved": "0.11.5",
+        "contentHash": "fxfX+0JGTZ8YQeu1MYjbBiK2CYTSzDyEeIixt+yqKKTn7FW8rv7JMY70qevup4ZJfD7Kk/VG/jDzQQTpfch87g=="
+      },
+      "MonoMod.Backports": {
+        "type": "Transitive",
+        "resolved": "1.1.2",
+        "contentHash": "baYlNy8n8kmaNhNvqmZ/dIPOeO1r9//dG1i2WbunMWtWZ2EKtIgmXaS+ZzphzTsikkGnoD4Jwr5g0TVdpDjgpw==",
+        "dependencies": {
+          "MonoMod.ILHelpers": "1.1.0",
+          "System.ValueTuple": "4.5.0"
+        }
+      },
+      "MonoMod.Core": {
+        "type": "Transitive",
+        "resolved": "1.2.2",
+        "contentHash": "3R9mQ7TxeQQBFLtGTR2VIDSBGx/I7d8RYpxvW1Mot0/PB6+UOnHr+lkw7dj8cus8YSnLdCFT+CG4JW89daEvjg==",
+        "dependencies": {
+          "Mono.Cecil": "0.11.5",
+          "MonoMod.Backports": "1.1.2",
+          "MonoMod.ILHelpers": "1.1.0",
+          "MonoMod.Utils": "25.0.8"
+        }
+      },
+      "MonoMod.ILHelpers": {
+        "type": "Transitive",
+        "resolved": "1.1.0",
+        "contentHash": "L2FWjhTrv7tcIxshfZ+M3OcaNr4cNw0IwiVZEgwqRnZ5QAN3+RrNJ8ZwCzwXUWyPDqooJxMcjjg8PsSYUiNBjQ=="
+      },
+      "MonoMod.RuntimeDetour": {
+        "type": "Transitive",
+        "resolved": "25.2.2",
+        "contentHash": "uqkdEZkvGv3nxEGolyateQXze/GFTuYYuMA9iW6Yjyt1Njqvx2SGYCEgdDgHh+kfhSZ6MymGU/20t99dU4DaVQ==",
+        "dependencies": {
+          "Mono.Cecil": "0.11.5",
+          "MonoMod.Backports": "1.1.2",
+          "MonoMod.Core": "1.2.2",
+          "MonoMod.ILHelpers": "1.1.0",
+          "MonoMod.Utils": "25.0.8"
+        }
+      },
+      "MonoMod.Utils": {
+        "type": "Transitive",
+        "resolved": "25.0.8",
+        "contentHash": "8wfyawgvGqUvfchAj7/gPazAjXO8CWNyXH+C0az+hgJH/80zVL5LxDhQMz0NQTyoCEJWU6gNBGc7CL+G7vCbaQ==",
+        "dependencies": {
+          "Mono.Cecil": "0.11.5",
+          "MonoMod.Backports": "1.1.2",
+          "MonoMod.ILHelpers": "1.1.0"
+        }
+      },
+      "Newtonsoft.Json": {
+        "type": "Transitive",
+        "resolved": "12.0.2",
+        "contentHash": "rTK0s2EKlfHsQsH6Yx2smvcTCeyoDNgCW7FEYyV01drPlh2T243PR2DiDXqtC5N4GDm4Ma/lkxfW5a/4793vbA=="
+      },
+      "NLog": {
+        "type": "Transitive",
+        "resolved": "4.4.12",
+        "contentHash": "fODew3BFT2XhAuqhGo2ZYT9OJE0ciGEBfvKXOmAAvaDsP/3ROIf083p8QUnmwKKw4jCkVW06ObX6gn/eFi2Skg=="
+      },
+      "protobuf-net": {
+        "type": "Transitive",
+        "resolved": "1.0.0",
+        "contentHash": "kTGOK0E87473sOImOjgZOnz3kTC2aMLffoRWQLYNuBLJnwNNmjanF9IkevZ9Q7yYLeABQfcF3BpeepuMntMVNw=="
+      },
+      "SharpDX": {
+        "type": "Transitive",
+        "resolved": "4.2.0-keen-cringe",
+        "contentHash": "LaJN3h1Gi1FWVdef2I5WtOH9gwzKCBniH0CragarbkN2QheYY6Lqm+91PcOfp1w/4wdVb+k8Kjv3sO393Tphtw=="
+      },
+      "SpaceEngineersDedicated.ReferenceAssemblies": {
+        "type": "Transitive",
+        "resolved": "1.205.23",
+        "contentHash": "J7mF5hY39PzzCZps6vhIRzKiq8vD6Af9TgumTJR068vjEi+BzyeEFhqX+cl2Dd1ngOmsBtGWc5m+vxgTfs5YuA==",
+        "dependencies": {
+          "SharpDX": "4.2.0-keen-cringe",
+          "protobuf-net": "1.0.0"
+        }
+      },
+      "System.ValueTuple": {
+        "type": "Transitive",
+        "resolved": "4.5.0",
+        "contentHash": "okurQJO6NRE/apDIP23ajJ0hpiNmJ+f0BwOlB/cSqTLQlw5upkf+5+96+iG2Jw40G1fCVCyPz/FhIABUjMR+RQ=="
+      },
+      "Torch.Server": {
+        "type": "Transitive",
+        "resolved": "1.3.1.303-master",
+        "contentHash": "Lptky+cSj1PmPB3s7jqnJRITuU0CCXJlA3aXHTrL4N5OLqzP/dp2oriIoTg6RhRZc/42k4bW3H5UtghFRU+R6Q==",
+        "dependencies": {
+          "NLog": "4.4.12",
+          "Newtonsoft.Json": "12.0.2"
+        }
+      }
+    }
+  }
+}

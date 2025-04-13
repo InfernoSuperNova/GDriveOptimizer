@@ -1,0 +1,6 @@
+<?xml version="1.0"?>
+<PluginManifest xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+    <Name>GDriveOptimizer</Name>
+    <Guid>7504915C-B8A8-409C-97C2-2C2E5CF7CB8A</Guid>
+    <Version>v1.0.0</Version>
+</PluginManifest>
