@@ -1,8 +1,10 @@
 using System;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Windows.Data;
 using HarmonyLib;
 using Havok;
+using NLog;
 using NLog.Fluent;
 using Sandbox.Engine.Utils;
 using Sandbox.Game.Entities;
@@ -53,7 +55,7 @@ namespace GDriveOptimizer
         
         public static bool UpdateBeforeSimulation(MyGravityGeneratorBase __instance)
         { 
-            
+            GDBase.UpdateBeforeSimulation(__instance);
             //Base_UpdateBeforeSimulation(__instance); // We somehow need to call the base UpdateBeforeSimulation otherwise other logic will be broken
           var containedEntities = (MyConcurrentHashSet<IMyEntity>)mContainedEntitiesInfo.GetValue(__instance);
            if (__instance.IsWorking)
@@ -74,8 +76,22 @@ namespace GDriveOptimizer
         {
             ctx.GetPattern(updateBeforeSimulation).Prefixes.Add(updateBeforeSimulationPatch);
             
+            var harmony = new Harmony("test");
+            harmony.PatchAll();
+            
             
             Log.Info("Patching successful maybe");
+        }
+    }
+
+    [HarmonyPatch(typeof(MyFunctionalBlock), "UpdateBeforeSimulation")]
+    class GDBase
+    {
+        [HarmonyReversePatch]
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public static void UpdateBeforeSimulation(MyFunctionalBlock instance)
+        {
+
         }
     }
 }

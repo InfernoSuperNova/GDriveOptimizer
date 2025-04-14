@@ -23,3 +23,4 @@
 /home/deltawing/RiderProjects/GDriveOptimizer/GDriveOptimizer/bin/Debug/net48/MonoMod.Utils.dll
 /home/deltawing/RiderProjects/GDriveOptimizer/GDriveOptimizer/bin/Debug/net48/System.ValueTuple.dll
 /home/deltawing/RiderProjects/GDriveOptimizer/GDriveOptimizer/obj/Debug/net48/GDriveOp.0B591070.Up2Date
+/home/deltawing/RiderProjects/GDriveOptimizer/GDriveOptimizer/obj/Debug/net48/GDriveOptimizer.sourcelink.json

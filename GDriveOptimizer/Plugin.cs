@@ -29,7 +29,6 @@ public class Plugin : TorchPluginBase, IWpfPlugin
 
     public override void Update()
     {
-        Log.Info("Updating");
         DeltaWingGravitySystem.Update();
     }
 }
