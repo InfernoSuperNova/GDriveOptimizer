@@ -109,40 +109,37 @@ public static async void Update()
         sw.Restart();
         #endif
         // Apply forces on the main thread
+        
+        tasks.Clear();
         foreach (var (entity, force, position, _) in results)
-        {
-            if (entity is SpaceEngineers.Game.ModAPI.IMyVirtualMass vm)
+            tasks.Add(Task.Run(() =>
             {
-                if (!vm.CubeGrid.IsStatic && !vm.CubeGrid.Physics.IsStatic)
+                if (entity is MyFloatingObject fo)
                 {
-                    vm.CubeGrid.Physics.AddForce(MyPhysicsForceType.APPLY_WORLD_FORCE, force, position, null, null, false);
+                    fo.GeneratedGravity += force;
                 }
-            }
-            else if (entity is MyFloatingObject fo)
-            {
-                fo.GeneratedGravity += force;
-            }
-            else if (entity is MyInventoryBagEntity bag1)
-            {
-                bag1.GeneratedGravity += force;
-            }
-            else if (entity is MyCargoContainerInventoryBagEntity bag2)
-            {
-                bag2.GeneratedGravity += force;
-            }
-            else
-            {
-                entity.Physics.AddForce(MyPhysicsForceType.APPLY_WORLD_FORCE, force, null, null);
-            }
-        }
+                else if (entity is MyInventoryBagEntity bag1)
+                {
+                    bag1.GeneratedGravity += force;
+                }
+                else if (entity is MyCargoContainerInventoryBagEntity bag2)
+                {
+                    bag2.GeneratedGravity += force;
+                }
+                else
+                {
+                    entity.Physics.AddForce(MyPhysicsForceType.APPLY_WORLD_FORCE, force, null, null);
+                }
+            }));
 
 
         foreach (var kvp in ShipForces)
-        {
+            tasks.Add(Task.Run(() =>
+            {
             var ship = kvp.Key;
             var physics = ship.Physics;
             var forces = kvp.Value;
-            if (forces.Count == 0) continue;
+            if (forces.Count == 0) return;
             var force = GetWeightedAveragePositionAndForce(forces);
             
             
@@ -152,7 +149,8 @@ public static async void Update()
             // {
             //     physics.AddForce(MyPhysicsForceType.APPLY_WORLD_FORCE, force.Force, force.Position, null, null, false);
             // }
-        }
+            }));
+        await Task.WhenAll(tasks);
         #if DEBUG_PERF
         sw.Stop();
         microseconds = (sw.ElapsedTicks * 1_000_000.0) / Stopwatch.Frequency;
