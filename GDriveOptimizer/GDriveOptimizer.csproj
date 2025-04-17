@@ -10,9 +10,15 @@
         <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
         <RestoreAdditionalProjectSources>https://nuget.storage.yandexcloud.net/index.json</RestoreAdditionalProjectSources>
     </PropertyGroup>
+    
 
     <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
         <DebugType>none</DebugType>
+    </PropertyGroup>
+    
+
+    <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
+      <DefineConstants>TRACE;DEBUG_PERF;</DefineConstants>
     </PropertyGroup>
 
     <ItemGroup>

@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Windows.Data;
@@ -25,6 +26,8 @@ namespace GDriveOptimizer
     [PatchShim]
     public static class MyGravityGeneratorBasePatch
     {
+        public static readonly Logger Log = LogManager.GetCurrentClassLogger();
+        
         internal static readonly MethodInfo updateBeforeSimulation =
         typeof(MyGravityGeneratorBase)
         .GetMethod(nameof(MyGravityGeneratorBase.UpdateBeforeSimulation), BindingFlags.Instance | BindingFlags.Public) ?? 
@@ -49,29 +52,57 @@ namespace GDriveOptimizer
         internal static PropertyInfo hasDamageEffectInfo = typeof(MyCubeBlock)  // or __instance.GetType().BaseType if needed
         .GetProperty("HasDamageEffect", BindingFlags.Instance | BindingFlags.NonPublic) ?? 
         throw new Exception("Failed to find property HasDamageEffect in class MyCubeBlock");
-        
-        
-        
-        
+
+
+        private static double _lastActionMicroseconds = 0;
+        #if DEBUG_PERF
+        public static void LogProfilingTime()
+        {
+            Log.Info("Time (Index blocks to list): " + _lastActionMicroseconds);
+            _lastActionMicroseconds = 0;
+        }
+        #endif
         public static bool UpdateBeforeSimulation(MyGravityGeneratorBase __instance)
-        { 
+        {
+            #if DEBUG_PERF
+            Stopwatch sw = Stopwatch.StartNew();
+            #endif
             GDBase.UpdateBeforeSimulation(__instance);
-            //Base_UpdateBeforeSimulation(__instance); // We somehow need to call the base UpdateBeforeSimulation otherwise other logic will be broken
-          var containedEntities = (MyConcurrentHashSet<IMyEntity>)mContainedEntitiesInfo.GetValue(__instance);
-           if (__instance.IsWorking)
-           {
-               
-               
-               
-             DeltaWingGravitySystem.AddGravityAffectedObjects(containedEntities);
-           }
-           if (containedEntities.Count != 0)
-             return false;
-           __instance.NeedsUpdate = (bool)hasDamageEffectInfo.GetValue(__instance) ? MyEntityUpdateEnum.EACH_FRAME : MyEntityUpdateEnum.EACH_100TH_FRAME;
-                 
+            //Base_UpdateBeforeSimulation(__instance);
+
+            var containedEntities = (MyConcurrentHashSet<IMyEntity>)mContainedEntitiesInfo.GetValue(__instance);
+
+            if (__instance.IsWorking)
+            {
+                DeltaWingGravitySystem.AddGravityAffectedObjects(containedEntities);
+            }
+
+            if (containedEntities.Count != 0)
+            {
+                #if DEBUG_PERF
+                sw.Stop();
+                LogMicroseconds(sw.ElapsedTicks);
+                #endif
+                return false;
+            }
+
+            __instance.NeedsUpdate = (bool)hasDamageEffectInfo.GetValue(__instance)
+                ? MyEntityUpdateEnum.EACH_FRAME
+                : MyEntityUpdateEnum.EACH_100TH_FRAME;
+            #if DEBUG_PERF
+            sw.Stop();
+            LogMicroseconds(sw.ElapsedTicks);
+            #endif
             return false;
         }
-
+        #if DEBUG_PERF
+        private static void LogMicroseconds(long elapsedTicks)
+        {
+            double microseconds = (elapsedTicks * 1_000_000.0) / Stopwatch.Frequency;
+            _lastActionMicroseconds += microseconds;
+            //Debug.WriteLine($"UpdateBeforeSimulation took {microseconds:F3} µs");
+        }
+        #endif
         public static void Patch(PatchContext ctx)
         {
             ctx.GetPattern(updateBeforeSimulation).Prefixes.Add(updateBeforeSimulationPatch);
@@ -91,7 +122,7 @@ namespace GDriveOptimizer
         [MethodImpl(MethodImplOptions.NoInlining)]
         public static void UpdateBeforeSimulation(MyFunctionalBlock instance)
         {
-
+            // An empty stub that lets us call the base method of UpdateBeforeSimulation on MyGravityGeneratorBase
         }
     }
 }
