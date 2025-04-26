@@ -92,8 +92,23 @@ public static async void Update()
                          myEntity.Physics.RigidBody2 == null && myEntity is not MyCharacter &&
                          myEntity.Physics.RigidBody != null)
                 {
-                    float mass = myEntity.Physics.RigidBody.Mass;
-                    results.Add((myEntity, acceleration * mass, worldMatrix.Translation, mass));
+                    float mass;
+
+                    switch (myEntity)
+                    {
+                        case MyFloatingObject myFloatingObject: // Don't ask me what goes on here, I just copied keen's application code
+                            mass = myFloatingObject.HasConstraints() ? 2f : 1f;
+                            break;
+                        case MyInventoryBagEntity inventoryBagEntity1:
+                        case MyCargoContainerInventoryBagEntity inventoryBagEntity2: // Both body bags and temp cargos have a mass of 1 for artificial gravity
+                            mass = 1f;
+                            break;
+                        default: // Other physics objects get their assigned mass (this was the case for ALL objects before the fix)
+                            mass = myEntity.Physics.RigidBody.Mass;
+                            break;
+                    }
+
+                    results.Add((myEntity, mass * acceleration, worldMatrix.Translation, mass));
                 }
             }));
         }
