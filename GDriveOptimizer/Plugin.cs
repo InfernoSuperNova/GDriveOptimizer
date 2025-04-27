@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.IO;
 using System.Windows.Controls;
+using HarmonyLib;
 using NLog.Fluent;
 using Sandbox.Game.Entities;
 using SpaceEngineers.Game.Entities.Blocks;
@@ -19,6 +20,8 @@ public class Plugin : TorchPluginBase, IWpfPlugin
     {
         base.Init(torch);
         _config = Persistent<Config>.Load(Path.Combine(StoragePath, "GDriveOptimizer.cfg"));
+        
+        
     }
 
     public UserControl GetControl() => new PropertyGrid

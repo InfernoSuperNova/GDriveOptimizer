@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Windows.Data;
+using GDriveOptimizer;
 using HarmonyLib;
 using Havok;
 using NLog;
@@ -15,8 +16,10 @@ using Sandbox.Game.GameSystems;
 using SpaceEngineers.Game.Entities.Blocks;
 using Torch.Managers.PatchManager;
 using VRage.Collections;
+using VRage.Game;
 using VRage.Game.Components;
 using VRage.Game.Entity;
+using VRage.Game.ModAPI;
 using VRage.ModAPI;
 using VRageMath;
 using VRageRender;
@@ -107,14 +110,19 @@ namespace GDriveOptimizer
         {
             ctx.GetPattern(updateBeforeSimulation).Prefixes.Add(updateBeforeSimulationPatch);
             
-            var harmony = new Harmony("test");
+            
+            var harmony = new Harmony("test"); // DUnno why this has to be here, doesn't work anywhere else
             harmony.PatchAll();
-            
-            
-            Log.Info("Patching successful maybe");
+
+            Log.Warn("GDriveOptimizer Patched Successfully"); // Why is this log necessary for the patch to work?
+                
         }
     }
 
+
+
+
+}
     [HarmonyPatch(typeof(MyFunctionalBlock), "UpdateBeforeSimulation")]
     class GDBase
     {
@@ -125,6 +133,51 @@ namespace GDriveOptimizer
             // An empty stub that lets us call the base method of UpdateBeforeSimulation on MyGravityGeneratorBase
         }
     }
-}
+
+    [HarmonyPatch(typeof(MyGravityGeneratorBase), "set_GravityAcceleration")]
+    public static class GravitySetterPatch
+    {
+        static void Postfix(MyGravityGeneratorBase __instance)
+        {
+            float newValue = __instance.GravityAcceleration;
+            DeltaWingGravitySystem.OnGravityChanged(__instance, newValue);
+        }
+    }
+
+    [HarmonyPatch(typeof(MyGravityGeneratorBase), "Init")]
+    public static class GravityInitPatch
+    {
+        static void Postfix(MyGravityGeneratorBase __instance, MyObjectBuilder_CubeBlock objectBuilder, MyCubeGrid cubeGrid)
+        {
+            DeltaWingGravitySystem.OnGravityGeneratorInit(__instance, objectBuilder, cubeGrid);
+        }
+    }
+    [HarmonyPatch(typeof(MyGravityGeneratorBase), "Closing")]
+    public static class GravityClosingPatch
+    {
+        static void Postfix(MyGravityGeneratorBase __instance)
+        {
+            DeltaWingGravitySystem.OnGravityGeneratorClose(__instance);
+        }
+    }
+
+    [HarmonyPatch(typeof(MyGravityGeneratorBase), "OnIsWorkingChanged")]
+    public static class GravityWorkingChangedPatch
+    {
+        static void Postfix(MyGravityGeneratorBase __instance)
+        {
+            bool newValue = __instance.IsWorking;
+            DeltaWingGravitySystem.OnGravityGeneratorWorkingChanged(__instance, newValue);
+        }
+    }
 
 
+
+    [HarmonyPatch(typeof(MyGravityGeneratorBase), "UpdateFieldShape")]
+    public static class UpdateFieldShapePatch
+    {
+        static void Postfix(MyGravityGeneratorBase __instance)
+        {
+            DeltaWingGravitySystem.OnFieldShapeUpdated(__instance);
+        }
+    }
