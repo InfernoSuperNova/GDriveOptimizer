@@ -12,11 +12,14 @@ using Sandbox.Game.Entities;
 using Sandbox.Game.Entities.Character;
 using Sandbox.Game.Entities.Cube;
 using Sandbox.Game.GameSystems;
+using Sandbox.Game.Weapons;
 using SpaceEngineers.Game.Entities.Blocks;
 using Torch.Managers.PatchManager;
 using VRage.Collections;
+using VRage.Game;
 using VRage.Game.Components;
 using VRage.Game.Entity;
+using VRage.Game.ModAPI;
 using VRage.ModAPI;
 using VRageMath;
 using VRageRender;
@@ -52,6 +55,10 @@ namespace GDriveOptimizer
         internal static PropertyInfo hasDamageEffectInfo = typeof(MyCubeBlock)  // or __instance.GetType().BaseType if needed
         .GetProperty("HasDamageEffect", BindingFlags.Instance | BindingFlags.NonPublic) ?? 
         throw new Exception("Failed to find property HasDamageEffect in class MyCubeBlock");
+        
+        public static event Action<MyGravityGenerator, Vector3> OnFieldSizeChanged;
+        
+        
 
 
         private static double _lastActionMicroseconds = 0;
@@ -110,7 +117,7 @@ namespace GDriveOptimizer
             var harmony = new Harmony("test");
             harmony.PatchAll();
             
-            
+            GravityGeneratorPropertyPatches.DoPatch();
             Log.Info("Patching successful maybe");
         }
     }
@@ -123,6 +130,72 @@ namespace GDriveOptimizer
         public static void UpdateBeforeSimulation(MyFunctionalBlock instance)
         {
             // An empty stub that lets us call the base method of UpdateBeforeSimulation on MyGravityGeneratorBase
+        }
+    }
+    
+    
+    public static class GravityGeneratorPropertyPatches
+    {
+        public static event Action<MyGravityGenerator, Vector3> OnFieldSizeChanged;
+        public static event Action<MyGravityGeneratorBase, float> OnGravityAccelerationChanged;
+        public static void DoPatch()
+        {
+            var harmony = new Harmony("GravityGeneratorPropertyPatches");
+            var fieldSizeSetterMethod = AccessTools.PropertySetter("SpaceEngineers.Game.Entities.Blocks.MyGravityGenerator:FieldSize");
+            var accelerationSetterMethod = AccessTools.PropertySetter("SpaceEngineers.Game.Entities.Blocks.MyGravityGeneratorBase:GravityAcceleration");
+            harmony.Patch(fieldSizeSetterMethod, new HarmonyMethod(typeof(GravityGeneratorPropertyPatches), nameof(FieldSizeSetterPrefix)));
+            harmony.Patch(accelerationSetterMethod, new HarmonyMethod(typeof(GravityGeneratorPropertyPatches), nameof(AccelerationSetterPrefix)));
+        }
+        public static void FieldSizeSetterPrefix(MyGravityGenerator __instance, ref Vector3 value)
+        {
+            var alwaysUseThreadProtection = OnFieldSizeChanged;
+            alwaysUseThreadProtection?.Invoke(__instance, value);
+        }
+        public static void AccelerationSetterPrefix(MyGravityGeneratorBase __instance, ref float value)
+        {
+            var alwaysUseThreadProtection = OnGravityAccelerationChanged;
+            alwaysUseThreadProtection?.Invoke(__instance, value);
+        }
+    }
+    
+    [HarmonyPatch(typeof(MyGravityGeneratorBase), "Init")]
+    public static class GravityInitPatch
+    {
+        public static event Action<MyGravityGeneratorBase, MyObjectBuilder_CubeBlock, MyCubeGrid> Trigger;
+        public static event Action<MyGravityGeneratorBase, MyCubeGrid, MyCubeGrid> GridChanged;
+
+        static void Postfix(MyGravityGeneratorBase __instance, MyObjectBuilder_CubeBlock objectBuilder, MyCubeGrid cubeGrid)
+        {
+            // Fire Init trigger
+            Trigger?.Invoke(__instance, objectBuilder, cubeGrid);
+
+            // Subscribe instance event with a closure capturing __instance
+            __instance.CubeGridChanged += (oldGrid) =>
+            {
+                var newGrid = __instance.CubeGrid;
+                GridChanged?.Invoke(__instance, (MyCubeGrid)oldGrid, newGrid);
+            };
+        }
+    }
+    [HarmonyPatch(typeof(MyGravityGeneratorBase), "Closing")]
+    public static class GravityClosingPatch
+    {
+        
+        public static event Action<MyGravityGeneratorBase> Trigger;
+        static void Postfix(MyGravityGeneratorBase __instance)
+        {
+            Trigger(__instance);
+        }
+    }
+
+    [HarmonyPatch(typeof(MyGravityGeneratorBase), "OnIsWorkingChanged")]
+    public static class GravityWorkingChangedPatch
+    {
+        public static event Action<MyGravityGeneratorBase, bool> Trigger;
+        static void Postfix(MyGravityGeneratorBase __instance)
+        {
+            bool newValue = __instance.IsWorking;
+            Trigger(__instance, newValue);
         }
     }
 }
