@@ -13,6 +13,7 @@ using Sandbox.Game.Entities.Character;
 using Sandbox.Game.Entities.Cube;
 using Sandbox.Game.GameSystems;
 using Sandbox.Game.Weapons;
+using Sandbox.ModAPI;
 using SpaceEngineers.Game.Entities.Blocks;
 using Torch.Managers.PatchManager;
 using VRage.Collections;
@@ -21,6 +22,7 @@ using VRage.Game.Components;
 using VRage.Game.Entity;
 using VRage.Game.ModAPI;
 using VRage.ModAPI;
+using VRage.Sync;
 using VRageMath;
 using VRageRender;
 
@@ -133,32 +135,77 @@ namespace GDriveOptimizer
     }
     
     
-    public static class GravityGeneratorPropertyPatches
-    {
-        public static event Action<MyGravityGenerator, Vector3> OnFieldSizeChanged = delegate { };
-        public static event Action<MyGravityGeneratorBase, float> OnGravityAccelerationChanged = delegate { };
-        public static void DoPatch()
-        {
-            var harmony = new Harmony("GravityGeneratorPropertyPatches");
-            var fieldSizeSetterMethod = AccessTools.PropertySetter("SpaceEngineers.Game.Entities.Blocks.MyGravityGenerator:FieldSize");
-            var accelerationSetterMethod = AccessTools.PropertySetter("SpaceEngineers.Game.Entities.Blocks.MyGravityGeneratorBase:GravityAcceleration");
-            harmony.Patch(accelerationSetterMethod, new HarmonyMethod(typeof(GravityGeneratorPropertyPatches), nameof(AccelerationSetterPrefix)));
-            harmony.Patch(fieldSizeSetterMethod, new HarmonyMethod(typeof(GravityGeneratorPropertyPatches), nameof(FieldSizeSetterPrefix)));
-            
-        }
-        public static bool FieldSizeSetterPrefix(MyGravityGenerator __instance, ref Vector3 value)
-        {
-            Plugin.Log.Info("Sanitysize");
-            OnFieldSizeChanged(__instance, value);
-            return true;
-        }
-        public static bool AccelerationSetterPrefix(MyGravityGeneratorBase __instance, ref float value)
-        {
-            Plugin.Log.Info("Sanityacceleration");
-            OnGravityAccelerationChanged(__instance, value);
-            return true;
-        }
-    }
+       public static class GravityGeneratorPropertyPatches
+   {
+       public static event Action<MyGravityGenerator, Vector3> OnFieldSizeChanged;
+       public static event Action<MyGravityGeneratorBase, float> OnGravityAccelerationChanged;
+       private static readonly Dictionary<MyGravityGenerator, Action<SyncBase>> _fieldSizeGravityGens = new Dictionary<MyGravityGenerator, Action<SyncBase>>();
+       private static readonly Dictionary<MyGravityGeneratorBase, Action<SyncBase>> _accelerationGravityGens = new Dictionary<MyGravityGeneratorBase, Action<SyncBase>>();
+       
+       private static FieldInfo _fieldSize = typeof(MyGravityGenerator).GetField("m_fieldSize", BindingFlags.Instance | BindingFlags.NonPublic);
+
+       private static FieldInfo _acceleration = typeof(MyGravityGeneratorBase).GetField("m_gravityAccceleration", BindingFlags.Instance | BindingFlags.NonPublic);
+       public static void DoPatch()
+       {
+           var harmony = new Harmony("GravityGeneratorPropertyPatches");
+           var fieldSizeSetterMethod = AccessTools.PropertySetter("SpaceEngineers.Game.Entities.Blocks.MyGravityGenerator:FieldSize");
+           var accelerationSetterMethod = AccessTools.PropertySetter("SpaceEngineers.Game.Entities.Blocks.MyGravityGeneratorBase:GravityAcceleration");
+           
+           harmony.Patch(fieldSizeSetterMethod, postfix: new HarmonyMethod(typeof(GravityGeneratorPropertyPatches), nameof(FieldSizeSetterPrefix)));
+           harmony.Patch(accelerationSetterMethod, postfix: new HarmonyMethod(typeof(GravityGeneratorPropertyPatches), nameof(AccelerationSetterPrefix)));
+       }
+        
+       public static void FieldSizeSetterPrefix(MyGravityGenerator __instance, ref Vector3 value)
+       {
+           var sync = (Sync<Vector3, SyncDirection.BothWays>)_fieldSize.GetValue(__instance);
+           if (sync == null || _fieldSizeGravityGens.ContainsKey(__instance))
+               return;
+           
+
+           Action<SyncBase> anon = (x) =>
+           {
+               var v = sync.Value;
+               OnFieldSizeChanged?.Invoke(__instance, v);
+           };
+
+           sync.ValueChanged += anon;
+           _fieldSizeGravityGens[__instance] = anon;
+           __instance.OnClose += (gravityGenEntity) => 
+           { 
+               if(_fieldSizeGravityGens.ContainsKey((MyGravityGenerator)gravityGenEntity))
+               {
+                   if ((Sync<Vector3, SyncDirection.BothWays>)_fieldSize.GetValue((MyGravityGenerator)gravityGenEntity) != null) 
+                       sync.ValueChanged -= _fieldSizeGravityGens[(MyGravityGenerator)gravityGenEntity];
+               }                                               
+           };
+          
+       }
+     
+       public static void AccelerationSetterPrefix(MyGravityGeneratorBase __instance, ref float value)
+       {
+           var sync = (Sync<float, SyncDirection.BothWays>)_acceleration.GetValue(__instance);
+           if (sync == null || _accelerationGravityGens.ContainsKey(__instance))
+               return;
+
+           Action<SyncBase> anon = (x) =>
+           {
+               var v = sync.Value;
+               OnGravityAccelerationChanged?.Invoke(__instance, v);
+           };
+
+           sync.ValueChanged += anon;
+           _accelerationGravityGens[__instance] = anon;
+           __instance.OnClose += (gravityGenEntity) =>
+           {
+               if (_accelerationGravityGens.ContainsKey((MyGravityGeneratorBase)gravityGenEntity))
+               {
+                   if ((Sync<float, SyncDirection.BothWays>)_acceleration.GetValue((MyGravityGeneratorBase)gravityGenEntity) != null)
+                       sync.ValueChanged -= _accelerationGravityGens[(MyGravityGeneratorBase)gravityGenEntity];
+               }
+
+           };
+       }
+   }
     
     [HarmonyPatch(typeof(MyGravityGeneratorBase), "Init")]
     public static class GravityInitPatch

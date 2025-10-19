@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("GDriveOptimizer")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Release")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+c8912df00e3c68429d8913ef532c8ebd8b6a4aa1")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+36f717cfa44c679047c6ccc8302f94475e53824f")]
 [assembly: System.Reflection.AssemblyProductAttribute("GDriveOptimizer")]
 [assembly: System.Reflection.AssemblyTitleAttribute("GDriveOptimizer")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
