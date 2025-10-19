@@ -56,7 +56,6 @@ namespace GDriveOptimizer
         .GetProperty("HasDamageEffect", BindingFlags.Instance | BindingFlags.NonPublic) ?? 
         throw new Exception("Failed to find property HasDamageEffect in class MyCubeBlock");
         
-        public static event Action<MyGravityGenerator, Vector3> OnFieldSizeChanged;
         
         
 
@@ -81,7 +80,7 @@ namespace GDriveOptimizer
 
             if (__instance.IsWorking)
             {
-                DeltaWingGravitySystem.AddGravityAffectedObjects(containedEntities);
+                //DeltaWingGravitySystem.AddGravityAffectedObjects(containedEntities);
             }
 
             if (containedEntities.Count != 0)
@@ -136,33 +135,36 @@ namespace GDriveOptimizer
     
     public static class GravityGeneratorPropertyPatches
     {
-        public static event Action<MyGravityGenerator, Vector3> OnFieldSizeChanged;
-        public static event Action<MyGravityGeneratorBase, float> OnGravityAccelerationChanged;
+        public static event Action<MyGravityGenerator, Vector3> OnFieldSizeChanged = delegate { };
+        public static event Action<MyGravityGeneratorBase, float> OnGravityAccelerationChanged = delegate { };
         public static void DoPatch()
         {
             var harmony = new Harmony("GravityGeneratorPropertyPatches");
             var fieldSizeSetterMethod = AccessTools.PropertySetter("SpaceEngineers.Game.Entities.Blocks.MyGravityGenerator:FieldSize");
             var accelerationSetterMethod = AccessTools.PropertySetter("SpaceEngineers.Game.Entities.Blocks.MyGravityGeneratorBase:GravityAcceleration");
-            harmony.Patch(fieldSizeSetterMethod, new HarmonyMethod(typeof(GravityGeneratorPropertyPatches), nameof(FieldSizeSetterPrefix)));
             harmony.Patch(accelerationSetterMethod, new HarmonyMethod(typeof(GravityGeneratorPropertyPatches), nameof(AccelerationSetterPrefix)));
+            harmony.Patch(fieldSizeSetterMethod, new HarmonyMethod(typeof(GravityGeneratorPropertyPatches), nameof(FieldSizeSetterPrefix)));
+            
         }
-        public static void FieldSizeSetterPrefix(MyGravityGenerator __instance, ref Vector3 value)
+        public static bool FieldSizeSetterPrefix(MyGravityGenerator __instance, ref Vector3 value)
         {
-            var alwaysUseThreadProtection = OnFieldSizeChanged;
-            alwaysUseThreadProtection?.Invoke(__instance, value);
+            Plugin.Log.Info("Sanitysize");
+            OnFieldSizeChanged(__instance, value);
+            return true;
         }
-        public static void AccelerationSetterPrefix(MyGravityGeneratorBase __instance, ref float value)
+        public static bool AccelerationSetterPrefix(MyGravityGeneratorBase __instance, ref float value)
         {
-            var alwaysUseThreadProtection = OnGravityAccelerationChanged;
-            alwaysUseThreadProtection?.Invoke(__instance, value);
+            Plugin.Log.Info("Sanityacceleration");
+            OnGravityAccelerationChanged(__instance, value);
+            return true;
         }
     }
     
     [HarmonyPatch(typeof(MyGravityGeneratorBase), "Init")]
     public static class GravityInitPatch
     {
-        public static event Action<MyGravityGeneratorBase, MyObjectBuilder_CubeBlock, MyCubeGrid> Trigger;
-        public static event Action<MyGravityGeneratorBase, MyCubeGrid, MyCubeGrid> GridChanged;
+        public static event Action<MyGravityGeneratorBase, MyObjectBuilder_CubeBlock, MyCubeGrid> Trigger = delegate { };
+        public static event Action<MyGravityGeneratorBase, MyCubeGrid, MyCubeGrid> GridChanged = delegate { };
 
         static void Postfix(MyGravityGeneratorBase __instance, MyObjectBuilder_CubeBlock objectBuilder, MyCubeGrid cubeGrid)
         {
@@ -181,7 +183,7 @@ namespace GDriveOptimizer
     public static class GravityClosingPatch
     {
         
-        public static event Action<MyGravityGeneratorBase> Trigger;
+        public static event Action<MyGravityGeneratorBase> Trigger = delegate { };
         static void Postfix(MyGravityGeneratorBase __instance)
         {
             Trigger(__instance);
@@ -191,7 +193,7 @@ namespace GDriveOptimizer
     [HarmonyPatch(typeof(MyGravityGeneratorBase), "OnIsWorkingChanged")]
     public static class GravityWorkingChangedPatch
     {
-        public static event Action<MyGravityGeneratorBase, bool> Trigger;
+        public static event Action<MyGravityGeneratorBase, bool> Trigger = delegate { };
         static void Postfix(MyGravityGeneratorBase __instance)
         {
             bool newValue = __instance.IsWorking;

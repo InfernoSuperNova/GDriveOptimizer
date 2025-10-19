@@ -9,14 +9,17 @@ using Torch;
 using Torch.API;
 using Torch.API.Plugins;
 using Torch.Views;
+using NLog;
 
 namespace GDriveOptimizer;
 
 public class Plugin : TorchPluginBase, IWpfPlugin
 {
+    
+    public static readonly Logger Log = LogManager.GetCurrentClassLogger();
     private Persistent<Config> _config = null!;
     private long _frame;
-    public static event Action<long> UpdateEvent;
+    public static event Action<long> UpdateEvent = delegate { };
     
     public override void Init(ITorchBase torch)
     {
@@ -36,6 +39,5 @@ public class Plugin : TorchPluginBase, IWpfPlugin
     public override void Update()
     {
         UpdateEvent(_frame++);
-        DeltaWingGravitySystem.Update();
     }
 }
