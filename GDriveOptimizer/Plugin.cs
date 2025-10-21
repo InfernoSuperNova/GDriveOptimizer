@@ -26,7 +26,9 @@ public class Plugin : TorchPluginBase, IWpfPlugin
         
         base.Init(torch);
         _config = Persistent<Config>.Load(Path.Combine(StoragePath, "GDriveOptimizer.cfg"));
+        ForceApplicatorSystem.Setup();
         GravityManager.Setup();
+        
         
     }
 

@@ -16,6 +16,7 @@ using Sandbox.Game.Weapons;
 using Sandbox.Game.World;
 using Sandbox.ModAPI;
 using SpaceEngineers.Game.Entities.Blocks;
+using SpaceEngineers.Game.ModAPI;
 using Torch.Managers.PatchManager;
 using VRage.Collections;
 using VRage.Game;
@@ -30,107 +31,25 @@ using VRageRender;
 namespace GDriveOptimizer
 {
     [PatchShim]
-    public static class MyGravityGeneratorBasePatch
+    public static class Patches
     {
         public static readonly Logger Log = LogManager.GetCurrentClassLogger();
 
         internal static readonly MethodInfo playerSimulate = typeof(MyCharacter).GetMethod(nameof(MyCharacter.Simulate), BindingFlags.Instance | BindingFlags.Public) ?? throw new Exception("Failed to find patch method (playerSimulate)");
-        internal static readonly MethodInfo playerSimulatePatch = typeof(MyGravityGeneratorBasePatch).GetMethod(nameof(MyGravityGeneratorBasePatch.PlayerSimulate), BindingFlags.Static | BindingFlags.Public) ?? throw new Exception("Failed to find patch method (playerSimulatePatch)");
+        internal static readonly MethodInfo playerSimulatePatch = typeof(Patches).GetMethod(nameof(Patches.PlayerSimulate), BindingFlags.Static | BindingFlags.Public) ?? throw new Exception("Failed to find patch method (playerSimulatePatch)");
         
-        internal static readonly MethodInfo updateBeforeSimulation =
-            typeof(MyGravityGeneratorBase)
-                .GetMethod(nameof(MyGravityGeneratorBase.UpdateBeforeSimulation),
-                    BindingFlags.Instance | BindingFlags.Public) ??
-            throw new Exception("Failed to find patch method");
-
-        internal static readonly MethodInfo updateBeforeSimulationPatch =
-            typeof(MyGravityGeneratorBasePatch)
-                .GetMethod(nameof(MyGravityGeneratorBasePatch.UpdateBeforeSimulation),
-                    BindingFlags.Static | BindingFlags.Public) ??
-            throw new Exception("Failed to find patch method");
-
-
-        internal static MethodInfo baseMethod = typeof(MyFunctionalBlock) // replace with the actual base class type
-                                                    .GetMethod("UpdateBeforeSimulation",
-                                                        BindingFlags.Instance | BindingFlags.NonPublic |
-                                                        BindingFlags.Public) ??
-                                                throw new Exception("Failed to find patch method");
-
-
-        internal static FieldInfo mContainedEntitiesInfo =
-            typeof(MyGravityGeneratorBase) // or __instance.GetType().BaseType if needed
-                .GetField("m_containedEntities", BindingFlags.Instance | BindingFlags.NonPublic) ??
-            throw new Exception("Failed to find patch method");
-
-        internal static PropertyInfo hasDamageEffectInfo =
-            typeof(MyCubeBlock) // or __instance.GetType().BaseType if needed
-                .GetProperty("HasDamageEffect", BindingFlags.Instance | BindingFlags.NonPublic) ??
-            throw new Exception("Failed to find property HasDamageEffect in class MyCubeBlock");
-
-
         private static double _lastActionMicroseconds = 0;
-#if DEBUG_PERF
-        public static void LogProfilingTime()
-        {
-            Log.Info("Time (Index blocks to list): " + _lastActionMicroseconds);
-            _lastActionMicroseconds = 0;
-        }
-#endif
-        public static bool UpdateBeforeSimulation(MyGravityGeneratorBase __instance)
-        {
-#if DEBUG_PERF
-            Stopwatch sw = Stopwatch.StartNew();
-#endif
-            GDBase.UpdateBeforeSimulation(__instance);
-            //Base_UpdateBeforeSimulation(__instance);
-
-            var containedEntities = (MyConcurrentHashSet<IMyEntity>)mContainedEntitiesInfo.GetValue(__instance);
-
-            if (__instance.IsWorking)
-            {
-                //DeltaWingGravitySystem.AddGravityAffectedObjects(containedEntities);
-            }
-
-            if (containedEntities.Count != 0)
-            {
-#if DEBUG_PERF
-                sw.Stop();
-                LogMicroseconds(sw.ElapsedTicks);
-#endif
-                return false;
-            }
-
-            __instance.NeedsUpdate = (bool)hasDamageEffectInfo.GetValue(__instance)
-                ? MyEntityUpdateEnum.EACH_FRAME
-                : MyEntityUpdateEnum.EACH_100TH_FRAME;
-#if DEBUG_PERF
-            sw.Stop();
-            LogMicroseconds(sw.ElapsedTicks);
-#endif
-            return false;
-        }
-
-
         private static int dumbTimer = 0;
         public static bool PlayerSimulate(MyCharacter __instance)
         {
-            if (dumbTimer++ % 120 != 00) return true;
+            //if (dumbTimer++ % 120 != 00) return true;
             var result = GravityManager.Sample(__instance.WorldMatrix.Translation);
-            Plugin.Log.Info($"Gravity: {result}");
+            //Plugin.Log.Info($"Gravity: {result}");
             return true;
         }
         
-#if DEBUG_PERF
-        private static void LogMicroseconds(long elapsedTicks)
-        {
-            double microseconds = (elapsedTicks * 1_000_000.0) / Stopwatch.Frequency;
-            _lastActionMicroseconds += microseconds;
-            //Debug.WriteLine($"UpdateBeforeSimulation took {microseconds:F3} µs");
-        }
-#endif
         public static void Patch(PatchContext ctx)
         {
-            ctx.GetPattern(updateBeforeSimulation).Prefixes.Add(updateBeforeSimulationPatch);
             ctx.GetPattern(playerSimulate).Prefixes.Add(playerSimulatePatch);
 
             var harmony = new Harmony("test");
@@ -140,17 +59,7 @@ namespace GDriveOptimizer
             Log.Info("Patching successful maybe");
         }
     }
-
-    [HarmonyPatch(typeof(MyFunctionalBlock), "UpdateBeforeSimulation")]
-    class GDBase
-    {
-        [HarmonyReversePatch]
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        public static void UpdateBeforeSimulation(MyFunctionalBlock instance)
-        {
-            // An empty stub that lets us call the base method of UpdateBeforeSimulation on MyGravityGeneratorBase
-        }
-    }
+    
     
 
 
@@ -239,6 +148,79 @@ namespace GDriveOptimizer
         }
     }
 
+    // [HarmonyPatch(typeof(MyGravityGeneratorBase), "CreateFieldShape")]
+    // public static class CreateFieldShapePatch
+    // {
+    //     static bool Prefix(MyGravityGeneratorBase __instance, ref HkBvShape __result)
+    //     {
+    //         __result = new HkBvShape();
+    //         return false;
+    //     }
+    // }
+
+    [HarmonyPatch(typeof(MyGravityProviderSystem), "AddGravityGenerator")]
+    public static class AddGravityGeneratorPatch
+    {
+        static bool Prefix(IMyGravityProvider gravityGenerator)
+        {
+            return false;
+        }
+    }
+    [HarmonyPatch(typeof(MyGravityProviderSystem), "RemoveGravityGenerator")]
+    public static class RemoveGravityGeneratorPatch
+    {
+        static bool Prefix(IMyGravityProvider gravityGenerator)
+        {
+            return false;
+        }
+    }
+    [HarmonyPatch(typeof(MyGravityProviderSystem), "OnGravityGeneratorMoved")]
+    public static class OnGravityGeneratorMovedPatch
+    {
+        static bool Prefix(IMyGravityProvider gravityGenerator, ref Vector3 velocity)
+        {
+            return false;
+        }
+    }
+
+
+    [HarmonyPatch(typeof(MyVirtualMass), "Init")]
+    public static class VirtualMassInit_Patch
+    {
+
+        public static Action<IMyVirtualMass> Trigger = delegate { };
+
+        static void Prefix(MyVirtualMass __instance, MyObjectBuilder_CubeBlock objectBuilder, MyCubeGrid cubeGrid)
+        {
+            __instance.Physics = null;
+            Trigger?.Invoke(__instance);
+        }
+    }
+    [HarmonyPatch(typeof(MySpaceBall), "Init")]
+    public static class SpaceBallInit_Patch
+    {
+
+        public static Action<IMyVirtualMass> Trigger = delegate { };
+
+        static void Prefix(MySpaceBall __instance, MyObjectBuilder_CubeBlock objectBuilder, MyCubeGrid cubeGrid)
+        {
+            __instance.Physics = null;
+            Trigger?.Invoke(__instance);
+        }
+    }
+    [HarmonyPatch(typeof(MyGravityGeneratorBase), "UpdateBeforeSimulation")]
+    public static class GravityGeneratorUpdate_Patch
+    {
+        
+
+        static bool Prefix(MyGravityGeneratorBase __instance)
+        {
+            return false;
+        }
+    }
+    
+    
+    
     [HarmonyPatch(typeof(MyGravityGeneratorBase), "Init")]
     public static class GravityInitPatch
     {
@@ -247,18 +229,24 @@ namespace GDriveOptimizer
 
         public static event Action<MyGravityGeneratorBase, MyCubeGrid, MyCubeGrid> GridChanged = delegate { };
 
-        static void Postfix(MyGravityGeneratorBase __instance, MyObjectBuilder_CubeBlock objectBuilder,
+        static void Prefix(MyGravityGeneratorBase __instance, MyObjectBuilder_CubeBlock objectBuilder,
             MyCubeGrid cubeGrid)
         {
+        
             // Fire Init trigger
             Trigger?.Invoke(__instance, objectBuilder, cubeGrid);
-
+        
             // Subscribe instance event with a closure capturing __instance
             __instance.CubeGridChanged += (oldGrid) =>
             {
                 var newGrid = __instance.CubeGrid;
                 GridChanged?.Invoke(__instance, (MyCubeGrid)oldGrid, newGrid);
             };
+        }
+
+        static void Postfix(MyGravityGeneratorBase __instance)
+        {
+            __instance.Physics = null;
         }
     }
 

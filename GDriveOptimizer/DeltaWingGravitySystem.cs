@@ -24,11 +24,7 @@
 // namespace GDriveOptimizer;
 //
 //
-// public class ForceData(Vector3D pos, Vector3D force)
-// {
-//     public Vector3D Position = pos;
-//     public Vector3D Force = force;
-// }
+//
 //
 // public static class DeltaWingGravitySystem
 // {

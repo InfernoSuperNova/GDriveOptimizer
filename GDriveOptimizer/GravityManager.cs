@@ -6,6 +6,8 @@ using SpaceEngineers.Game.ModAPI;
 using VRage.Game;
 using VRageMath;
 using NLog;
+using Sandbox.Game.Entities.Cube;
+using Torch.Server.Annotations;
 
 namespace GDriveOptimizer;
 
@@ -29,15 +31,35 @@ public static class GravityManager
         Plugin.UpdateEvent += Update;
     }
 
-    public static Vector3D Sample(Vector3D worldPos)
+    /// <summary>
+    /// Samples a world position on the AABB tree. 
+    /// </summary>
+    /// <param name="worldPos">The position to sample.</param>
+    /// <param name="instigator">Optional grid to be passed to ignore this cubegrid when searching.</param>
+    /// <returns></returns>
+    public static Vector3D Sample(Vector3D worldPos, MyCubeGrid? instigator = null)
     {
         // Temp testing
         var collector = new GravityCollector();
-        collector.Collect(_generatorTree, ref worldPos);
+        collector.Collect(_generatorTree, ref worldPos, instigator);
         var fields = collector.Fields;
         
-        // TODO: Logic, bvh tree for grids
-        return Vector3D.Zero;
+        Vector3D force = default;
+        foreach (var (field, grid) in fields)
+        {
+            var referenceWorldPos = grid.WorldMatrix.Translation;
+
+            var worldDirection = worldPos - referenceWorldPos;
+            var gridLocal = (Vector3D.TransformNormal(worldDirection, MatrixD.Transpose(grid.WorldMatrix)));
+
+            var box = field.LocalAABB;
+            if (box.Contains(gridLocal) != ContainmentType.Contains) continue;
+            
+            var nonTransformed = field.Sample((Vector3I)gridLocal);
+            force += Vector3D.TransformNormal(nonTransformed, grid.WorldMatrix);
+        }
+        
+        return force;
     }
 
     public static Vector3D Sample(MyCubeGrid grid, Vector3I pos)
@@ -45,34 +67,39 @@ public static class GravityManager
         var field = ValidateGridField(grid);
         return field.Sample(pos);
     }
-
-    private static MyDynamicAABBTreeD _generatorTree = GenerateAABBTree();
+    
+    
+    private static Dictionary<MyCubeGrid, SparseGravityField> _fields = new();
+    private static Dictionary<MyCubeGrid, SparseGravityField> _fieldsSwap = new();
+    private static MyDynamicAABBTreeD _generatorTree = new MyDynamicAABBTreeD();
     
     private static MyDynamicAABBTreeD GenerateAABBTree()
     {
-        Plugin.Log.Info("Generating AABB Tree");
         MyDynamicAABBTreeD gravityFieldTree = new MyDynamicAABBTreeD();
         foreach (var field in _fields)
         {
             var aabb = field.Value.GetProxyAABB();
-            gravityFieldTree.AddProxy(ref aabb, (object)field, 0U);
+            gravityFieldTree.AddProxy(ref aabb, (object)(field.Value, field.Key), 0U);
         }
-
         return gravityFieldTree;
     }
     
     
     private class GravityCollector
     {
-        public List<SparseGravityField> Fields = new List<SparseGravityField>();
+        public List<(SparseGravityField, MyCubeGrid)> Fields = new List<(SparseGravityField, MyCubeGrid)>();
         private readonly Func<int, bool> CollectAction;
         private Vector3D WorldPoint;
         private MyDynamicAABBTreeD Tree;
 
         public GravityCollector() => this.CollectAction = new Func<int, bool>(this.CollectCallback);
 
-        public void Collect(MyDynamicAABBTreeD tree, ref Vector3D worldPoint)
+
+
+        private MyCubeGrid? _lastInstigator;
+        public void Collect(MyDynamicAABBTreeD tree, ref Vector3D worldPoint, MyCubeGrid? instigator = null)
         {
+            _lastInstigator = instigator;
             this.Tree = tree;
             this.WorldPoint = worldPoint;
             tree.QueryPoint(this.CollectAction, ref worldPoint);
@@ -80,8 +107,8 @@ public static class GravityManager
 
         private bool CollectCallback(int proxyId)
         {
-            SparseGravityField userData = this.Tree.GetUserData<SparseGravityField>(proxyId);
-            
+            (SparseGravityField, MyCubeGrid) userData = this.Tree.GetUserData<(SparseGravityField, MyCubeGrid)>(proxyId);
+            if (_lastInstigator != null && _lastInstigator == userData.Item2) return true;
             Fields.Add(userData);
             return true;
         }
@@ -90,73 +117,103 @@ public static class GravityManager
     
     private static void Update(long frame)
     {
-        //foreach (var field in _fields) field.Value.Update(frame);
+        _generatorTree = GenerateAABBTree();
+
+        var temp = _fieldsSwap;
+        temp.Clear();
+        foreach (var field in _fields) if (!field.Key.Closed) temp.Add(field.Key, field.Value);
+        _fieldsSwap = _fields;
+        _fields = temp;
+        foreach (var field in _fields) field.Value.Update(frame);
+        ForceApplicatorSystem.Update();
     }
     private static void OnFieldSizeChanged(MyGravityGenerator gen, Vector3 newSize)
     {
-        Plugin.Log.Info($"Changed field size for {gen.CustomName}");
-        // var field = ValidateGridField(gen.CubeGrid);
-        // field.ChangeGeneratorSize(gen);
+        var field = ValidateGridField(gen.CubeGrid);
+        {
+            field.ChangeGeneratorSize(gen);
+            field.InvalidateBoundingBox();
+        }
     }
     private static void OnGravityAccelerationChanged(MyGravityGeneratorBase gen, float newStrength)
     {
-        Plugin.Log.Info($"Changed acceleration for {gen.CustomName}");
-        // var field = ValidateGridField(gen.CubeGrid);
-        // if (gen is MyGravityGenerator genFull)
-        //     field.ChangeGeneratorStrength(genFull);
+        var field = ValidateGridField(gen.CubeGrid);
+        if (gen is MyGravityGenerator genFull)
+        {
+            field.ChangeGeneratorStrength(genFull);
+        }
     }
     private static void OnGravityGeneratorFunctionalityChanged(MyGravityGeneratorBase gen, bool isFunctional)
     {
-        Plugin.Log.Info($"Changed functionality for {gen.CustomName}");
-        // var field = ValidateGridField(gen.CubeGrid);
-        // if (gen is MyGravityGenerator genFull)
-        //     field.ToggleGenerator(genFull);
+        var field = ValidateGridField(gen.CubeGrid);
+        if (gen is MyGravityGenerator genFull)
+        {
+            field.ToggleGenerator(genFull);
+        }
     }
     private static void OnGravityGeneratorCreated(MyGravityGeneratorBase gen, MyObjectBuilder_CubeBlock _, MyCubeGrid grid)
     {
-        Plugin.Log.Info($"Created {gen.CustomName}");
-        // if (gen is MyGravityGenerator genFull)
-        //     AddGravityGeneratorToGrid(grid, genFull);
+        try
+        {
+            if (gen is MyGravityGenerator genFull)
+            {
+                AddGravityGeneratorToGrid(grid, genFull);
+            }
+                
+        }
+        catch (Exception e)
+        {
+            Plugin.Log.Error($"Exception in OnGravityGeneratorCreated: {e}");
+        }
+        
     }
     private static void OnGravityGeneratorChangedGrid(MyGravityGeneratorBase gen, MyCubeGrid oldGrid, MyCubeGrid newGrid)
     {
-        Plugin.Log.Info($"Changed grid: {gen.CustomName}");
-        // if (gen is MyGravityGenerator genFull)
-        // {
-        //     RemoveGravityGeneratorFromGrid(oldGrid, genFull);
-        //     AddGravityGeneratorToGrid(newGrid, genFull);
-        // }
+        if (gen is MyGravityGenerator genFull)
+        {
+            RemoveGravityGeneratorFromGrid(oldGrid, genFull);
+            AddGravityGeneratorToGrid(newGrid, genFull);
+        }
         
     }
     private static void OnGravityGeneratorDeleted(MyGravityGeneratorBase gen)
     {
-        Plugin.Log.Info($"Destroyed {gen.CustomName}");
-        // if (gen is MyGravityGenerator genFull)
-        //     RemoveGravityGeneratorFromGrid(gen.CubeGrid, genFull);
+        if (gen is MyGravityGenerator genFull)
+        {
+            RemoveGravityGeneratorFromGrid(gen.CubeGrid, genFull);
+        }
+        //DebugAll();
+    }
+
+    private static void DebugAll()
+    {
+        foreach (var field in _fields)
+        {
+            Plugin.Log.Info($"{field.Key.DisplayName}");
+            field.Value.DebugGravityGenerators();
+        }
     }
     
     
     
-    
-    private static Dictionary<MyCubeGrid, SparseGravityField> _fields = new();
 
 
     private static void AddGravityGeneratorToGrid(MyCubeGrid grid, MyGravityGenerator gen)
     {
         var field = ValidateGridField(grid);
         field.AddGenerator(gen);
-        
+        field.InvalidateBoundingBox();
     }
 
     private static void RemoveGravityGeneratorFromGrid(MyCubeGrid grid, MyGravityGenerator gen)
     {
         var field = ValidateGridField(grid);
         field.RemoveGenerator(gen);
+        field.InvalidateBoundingBox();
     }
 
     private static SparseGravityField ValidateGridField(MyCubeGrid grid)
     {
-        Plugin.Log.Info($"Field validated for {grid.DisplayName}");
         if (!_fields.ContainsKey(grid)) _fields.Add(grid, new SparseGravityField(grid));
         return _fields[grid];
     }
@@ -191,15 +248,24 @@ class FieldRegion
 
     public void Recalculate()
     {
-        Plugin.Log.Info($"Recalculating field {Signature}");
+        
         Vector3D total = Vector3D.Zero;
         foreach (var gen in Generators)
         {
             if (gen.GravityAcceleration == 0) continue;
             if (!gen.IsFunctional) continue;
-            total += gen.GravityAcceleration * gen.WorldMatrix.Down;
 
+            // 'Down' in grid space
+            Vector3I downLocal = -Base6Directions.GetIntVector(gen.Orientation.Up);
+
+            // Convert to Vector3 (grid-space direction)
+            Vector3 downVector = new Vector3(downLocal);
+
+            // Multiply by gravity strength
+            total += downVector * gen.GravityAcceleration;
         }
+
+        var was = CachedGravity;
         CachedGravity = total;
         Validity = GravityRegionState.Valid;
     }
@@ -228,8 +294,27 @@ class SparseGravityField
 
     private MyCubeGrid _thisGrid;
 
+    private BoundingBox m_localAABB;
+    private bool m_localAABBValid;
 
+    public BoundingBox LocalAABB
+    {
+        get
+        {
+            if (!m_localAABBValid)
+            {
+                RecalcBoundingBox();
+                m_localAABBValid = true;
+            }
 
+            return m_localAABB;
+        }
+        
+    }
+    public void DebugGravityGenerators()
+    {
+        Plugin.Log.Info($"Gen count: {_generators.Count}");
+    }
     public SparseGravityField(MyCubeGrid grid)
     {
         _thisGrid = grid;
@@ -258,30 +343,43 @@ class SparseGravityField
     
     public BoundingBoxD GetProxyAABB()
     {
-        var box = GetBoundingBox();
+        var box = LocalAABB;
+        
         MatrixD matrix = _thisGrid.WorldMatrix;
-        Vector3D translation = matrix.Translation + Vector3D.Transform(box.Center, matrix);
+        Vector3D translation = Vector3D.Transform(box.Center, matrix);
         Quaternion fromRotationMatrix = Quaternion.CreateFromRotationMatrix(in matrix);
         MyOrientedBoundingBoxD local = new MyOrientedBoundingBoxD(translation, box.HalfExtents, fromRotationMatrix);
         return local.GetAABB();
     }
 
-    public BoundingBox GetBoundingBox() // TODO: Optimize this
+    public void RecalcBoundingBox()
     {
-        var box = new BoundingBox();
+        if (_generators.Count == 0)
+        {
+            m_localAABB = new BoundingBox();
+            return;
+        }
 
+        var generator1 = _generators.FirstElement();
+        
+        
+        var box = GetGeneratorBox(generator1);
         foreach (var generator in _generators)
         {
-            var generatorAabbMaybe = generator.GetBoundingBox();
-            if (generatorAabbMaybe != null)
-            {
-                var generatorAabb = generatorAabbMaybe.Value;
-                box = box.Intersect(generatorAabb);
-            }
+            var otherBox = GetGeneratorBox(generator);
+            box.Include(otherBox);
+            box = BoundingBox.CreateMerged(box, otherBox);
         }
-        return box;
+        m_localAABB = box;
     }
-    
+
+    private static BoundingBox GetGeneratorBox(MyGravityGenerator generator) // Cache this probably
+    {
+        var offset = new Vector3(2.5, 2.5, 2.5);
+        return new BoundingBox(generator.Position * generator.CubeGrid.GridSize - generator.FieldSize / 2 - offset,
+            generator.Position * generator.CubeGrid.GridSize + generator.FieldSize / 2 + offset);
+    }
+
 
     public void ChangeGeneratorStrength(MyGravityGenerator generator)
     {
@@ -309,6 +407,7 @@ class SparseGravityField
     /// </summary>
     private void InvalidateAllRegions() 
     {
+        voxelToRegion.Clear();
         allRegions.Clear();
         signatureToRegion.Clear();
     }
@@ -327,6 +426,7 @@ class SparseGravityField
     {
         if (!voxelToRegion.TryGetValue(voxel, out var region))
         {
+            ForceApplicatorSystem.InvalidateForGrid(_thisGrid);
             // If it doesn't have a region, then we make one
             var generators = CollectGenerators(voxel);
             if (generators.Count == 0) return Vector3D.Zero;
@@ -340,10 +440,12 @@ class SparseGravityField
                 break;
             
             case GravityRegionState.Dirty:                // Recalculate the force, mark the region as valid again then return it
+                ForceApplicatorSystem.InvalidateForGrid(_thisGrid);
                 region.Recalculate();
                 break;
 
             case GravityRegionState.Invalid:              // Shit's fucked, check if a region exists for this signature, if not throw it out and get a new one
+                ForceApplicatorSystem.InvalidateForGrid(_thisGrid);
                 var generators = CollectGenerators(voxel);
                 region = AssignVoxel(voxel, generators, _frame);
                 break;
@@ -371,21 +473,14 @@ class SparseGravityField
         {
             if (GeneratorCoversVoxel(generator, voxel)) generatorBuffer.Add(generator);
         }
-
         return generatorBuffer;
     }
 
     private bool GeneratorCoversVoxel(MyGravityGenerator generator, Vector3I voxel)
     {
-        var voxelf = (Vector3)voxel * _thisGrid.GridSize;
-        var aabbmaybe = generator.GetBoundingBox();
-        if (aabbmaybe != null)
-        {
-            var aabb = aabbmaybe.Value; // TODO: Replace grabbing the box directly with a lazily updated AABB tree instead
-            return aabb.Contains(voxelf) == ContainmentType.Contains;
-        }
-        return false;
-        
+        var voxelf = (Vector3)voxel;
+        var aabb = GetGeneratorBox(generator);
+        return aabb.Contains(voxelf) == ContainmentType.Contains;
     }
 
     // Assign a voxel to a FieldRegion
@@ -413,5 +508,9 @@ class SparseGravityField
         }
         return hash;
     }
-    
+
+    public void InvalidateBoundingBox()
+    {
+        m_localAABBValid = false;
+    }
 }
