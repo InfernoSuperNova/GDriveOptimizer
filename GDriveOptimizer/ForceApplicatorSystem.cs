@@ -1,24 +1,33 @@
 using System.Collections.Concurrent;
+using System.Reflection;
 using Sandbox.Game.Entities;
+using Sandbox.Game.GameSystems;
 using SpaceEngineers.Game.ModAPI;
 using VRage.Collections;
 using VRage.Game.Components;
 using VRage.Game.Entity;
+using VRage.Game.ModAPI;
 using VRageMath;
 
 namespace GDriveOptimizer;
 
 public static class ForceApplicatorSystem
 {
-
-
+    
     private class GridForceHandler
     {
+        
+        private static readonly FieldInfo JumpTimeLeftField =
+            typeof(MyGridJumpDriveSystem).GetField("m_jumpTimeLeft", BindingFlags.NonPublic | BindingFlags.Instance);
+        
         public List<IMyVirtualMass> Masses;
         public MyCubeGrid Grid;
         public bool Valid;
+        public bool JustJumped;
+        public bool WillJump;
         private (Vector3D, Vector3D) _cachedForce;
         private Dictionary<IMyVirtualMass, bool> _lastEnabled;
+        internal float StrengthMultiplier = 1;
 
         public void AddMassBlock(IMyVirtualMass mass)
         {
@@ -35,8 +44,12 @@ public static class ForceApplicatorSystem
             _lastEnabled = [];
         }
 
+        
         public void Update()
         {
+            JustJumped = WillJump;
+            WillJump = IsAboutToJump();
+            StrengthMultiplier = Config.I.AllowArtificialGravityInNaturalGravity ? 1 : MyGravityProviderSystem.CalculateArtificialGravityStrengthMultiplier(MyGravityProviderSystem.CalculateHighestNaturalGravityMultiplierInPoint(Grid.WorldMatrix.Translation));
             for (var index = Masses.Count - 1; index >= 0; index--)
             {
                 var mass = Masses[index];
@@ -53,22 +66,25 @@ public static class ForceApplicatorSystem
                 if (cubeBlock.IsWorking != _lastEnabled[mass]) Invalidate();
                 _lastEnabled[mass] = cubeBlock.IsWorking;
             }
+
+            
         }
 
         public (Vector3D, Vector3D) GetIntraForce()
         {
             if (Valid) return _cachedForce;
-
+            
             var forces = new List<(Vector3D, Vector3D)>();
 
             foreach (var mass in Masses)
             {
-                
+                if (!mass.IsWorking) continue;
                 var pos = mass.Position * mass.CubeGrid.GridSize;
-                var force = GravityManager.Sample(Grid, (Vector3I)pos) * mass.VirtualMass;
+                var force = GravityManager.Sample(Grid, pos) * mass.VirtualMass;
                 forces.Add((force, pos));
+                
             }
-
+            
             _cachedForce = GetWeightedAveragePositionAndForce(forces);
             Valid = true;
             return _cachedForce;
@@ -78,17 +94,18 @@ public static class ForceApplicatorSystem
         {
             Valid = false;
         }
+        
+        private bool IsAboutToJump()
+        {
+            var jumpSystem = Grid.GridSystems?.JumpSystem;
+            if (jumpSystem == null) return false;
+
+            var timeLeft = (float)JumpTimeLeftField?.GetValue(jumpSystem);
+            
+            return timeLeft is > 0 and < 0.016666666f;
+        }
     }
     
-    
-    // TODO:
-    // Fix jump bug
-    // Add auto invalidation to old regions
-    // Update handling for floating objects probably and astronauts
-    // Implement sphericals
-    // Remove physics components from shit that don't need them eg the player
-    // Cache total force applied to a grid for intra grid actions and invalidate when mass block state changes or when region force is recalculated
-    // Make sure it doesn't work in natural gravity
     private static Dictionary<MyCubeGrid, GridForceHandler> _gridForceHandlers = [];
     private static Dictionary<MyCubeGrid, GridForceHandler> _gridForceHandlersSwap = [];
     private static HashSet<IMyVirtualMass> _masses = [];
@@ -96,8 +113,7 @@ public static class ForceApplicatorSystem
 
     public static void Setup()
     {
-        VirtualMassInit_Patch.Trigger += AddMassBlock;
-        SpaceBallInit_Patch.Trigger += AddMassBlock;
+        VirtualMassPatches.Init += AddMassBlock;
     }
 
     private static void AddMassBlock(IMyVirtualMass mass)
@@ -114,8 +130,13 @@ public static class ForceApplicatorSystem
         return _gridForceHandlers[grid];
     }
 
-    public static void InvalidateForGrid(MyCubeGrid grid)
+    public static void InvalidateCachedIntraForce(MyCubeGrid grid)
     {
+        if (!_gridForceHandlers.ContainsKey(grid))
+        {
+            //Plugin.Log.Warn($"ForceApplicatorSystem: Tried to invalidate grid {grid.DisplayName}, does not exist!?!?");
+            return;
+        }
         _gridForceHandlers[grid].Invalidate();
     }
     
@@ -129,21 +150,23 @@ public static class ForceApplicatorSystem
         foreach (var field in _gridForceHandlers) if (!field.Key.Closed) temp.Add(field.Key, field.Value);
         _gridForceHandlersSwap = _gridForceHandlers;
         _gridForceHandlers = temp;
-        foreach (var forceManager in _gridForceHandlers)
+        foreach (var forceManager in _gridForceHandlers.Values.ToList()) // Yes yes, I went to all the effort to reuse lists... then just did this dumb hack. Only because forceManager.Update can mutate the collection
         {
-            forceManager.Value.Update();
+            forceManager.Update();
         }
 
         foreach (var forceManager in _gridForceHandlers)
         {
+            if (Config.I.FixJumpBug && forceManager.Value.JustJumped) continue; // Prevents force from being performed two galaxies away causing a huge jerk in the ship shredding subgrids
             var force = forceManager.Value.GetIntraForce();
             var grid = forceManager.Key;
             
             
-            var transformedForce = Vector3D.TransformNormal(force.Item1, grid.WorldMatrix);
+            var transformedForce = Vector3D.TransformNormal(force.Item1 * forceManager.Value.StrengthMultiplier, grid.WorldMatrix);
             var transformedPos = Vector3D.Transform(force.Item2, grid.WorldMatrix);
             
             if (transformedForce.IsZero()) continue;
+            if (Config.I.ApplyForceAtCenterOfMass) transformedPos = grid.Physics.CenterOfMassWorld;
             grid.Physics.AddForce(MyPhysicsForceType.APPLY_WORLD_FORCE, transformedForce, transformedPos, null, null, false);
             
         }
@@ -162,22 +185,21 @@ public static class ForceApplicatorSystem
 
     private static void ApplyArtificialGravityToMassBlock(IMyVirtualMass mass)
     {
-        if (!mass.Physics.RigidBody.IsActive) return;
+        //if (!mass.Physics.RigidBody.IsActive) return;
         if (!mass.IsWorking || mass.CubeGrid.IsStatic ||
             mass.CubeGrid.Physics.IsStatic) return;
         
-        //float strengthMultiplier = MyGravityProviderSystem.CalculateArtificialGravityStrengthMultiplier(MyGravityProviderSystem.CalculateHighestNaturalGravityMultiplierInPoint(worldMatrix.Translation));
         var worldMatrix = mass.WorldMatrix;
         Vector3D pos = worldMatrix.Translation;
         var interGravity = GravityManager.Sample(pos, (MyCubeGrid)mass.CubeGrid);
         if (interGravity == Vector3D.Zero) return;
         
-        Vector3 force = interGravity * mass.VirtualMass;
+        Vector3 force = interGravity * mass.VirtualMass * _gridForceHandlers[(MyCubeGrid)mass.CubeGrid].StrengthMultiplier;
         
         
         Vector3? torque = new Vector3?();
         float? maxSpeed = new float?();
-        
+        if (Config.I.ApplyForceAtCenterOfMass) pos = mass.CubeGrid.Physics.CenterOfMassWorld;
         mass.CubeGrid.Physics.AddForce(MyPhysicsForceType.APPLY_WORLD_FORCE, force, pos, torque, maxSpeed, false);
     }
     
