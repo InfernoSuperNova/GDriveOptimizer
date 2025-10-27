@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Numerics;
 using System.Windows.Controls;
+using GDriveOptimizer.Gravity;
 using NLog.Fluent;
 using Sandbox.Game.Entities;
 using SpaceEngineers.Game.Entities.Blocks;

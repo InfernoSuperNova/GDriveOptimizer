@@ -9,7 +9,7 @@ using VRage.Game.Entity;
 using VRage.Game.ModAPI;
 using VRageMath;
 
-namespace GDriveOptimizer;
+namespace GDriveOptimizer.Gravity;
 
 public static class ForceApplicatorSystem
 {
@@ -141,7 +141,7 @@ public static class ForceApplicatorSystem
     }
     
     
-    
+    // TODO: Refactor this
     public static void Update()
     {
         
@@ -155,20 +155,10 @@ public static class ForceApplicatorSystem
             forceManager.Update();
         }
 
-        foreach (var forceManager in _gridForceHandlers)
+        foreach (var (grid, forceManager) in _gridForceHandlers)
         {
-            if (Config.I.FixJumpBug && forceManager.Value.JustJumped) continue; // Prevents force from being performed two galaxies away causing a huge jerk in the ship shredding subgrids
-            var force = forceManager.Value.GetIntraForce();
-            var grid = forceManager.Key;
-            
-            
-            var transformedForce = Vector3D.TransformNormal(force.Item1 * forceManager.Value.StrengthMultiplier, grid.WorldMatrix);
-            var transformedPos = Vector3D.Transform(force.Item2, grid.WorldMatrix);
-            
-            if (transformedForce.IsZero()) continue;
-            if (Config.I.ApplyForceAtCenterOfMass) transformedPos = grid.Physics.CenterOfMassWorld;
-            grid.Physics.AddForce(MyPhysicsForceType.APPLY_WORLD_FORCE, transformedForce, transformedPos, null, null, false);
-            
+            ApplyIntraForce(forceManager, grid);
+            ApplyInterForce(forceManager, grid);
         }
 
         var temp2 = _massesSwap;
@@ -176,12 +166,59 @@ public static class ForceApplicatorSystem
         foreach (var mass in _masses) if (!mass.Closed) temp2.Add(mass);
         _massesSwap = _masses;
         _masses = temp2;
-        foreach (var block in _masses)
+        // foreach (var block in _masses)
+        // {
+        //     ApplyArtificialGravityToMassBlock(block);
+        // }
+    }
+
+
+
+    private static void ApplyIntraForce(GridForceHandler forceManager, MyCubeGrid grid)
+    {
+        if (Config.I.FixJumpBug && forceManager.JustJumped) return; // Prevents force from being performed two galaxies away causing a huge jerk in the ship shredding subgrids
+        var force = forceManager.GetIntraForce();
+            
+            
+        var transformedForce = Vector3D.TransformNormal(force.Item1 * forceManager.StrengthMultiplier, grid.WorldMatrix);
+        var transformedPos = Vector3D.Transform(force.Item2, grid.WorldMatrix);
+
+        if (transformedForce.IsZero()) return;
+        if (Config.I.ApplyForceAtCenterOfMass) transformedPos = grid.Physics.CenterOfMassWorld;
+        grid.Physics.AddForce(MyPhysicsForceType.APPLY_WORLD_FORCE, transformedForce, transformedPos, null, null, false);
+    }
+
+    private static void ApplyInterForce(GridForceHandler forceManager, MyCubeGrid grid)
+    {
+        var intersectingInterGridBoxes = GravityManager.GetFieldsIntersectingWithGrid(grid);
+        
+        if (intersectingInterGridBoxes.Count <= 0) return;
+        if (forceManager.Masses.Count <= 0) return;
+        foreach (var mass in forceManager.Masses)
         {
-            ApplyArtificialGravityToMassBlock(block);
+            if (!mass.IsWorking || mass.CubeGrid.IsStatic ||
+                mass.CubeGrid.Physics.IsStatic) return;
+            
+            var worldMatrix = mass.WorldMatrix;
+            Vector3D massWorldPos = worldMatrix.Translation;
+            Vector3D force2 = Vector3D.Zero;
+            var virtualMass = mass.VirtualMass;
+                
+            // This loop should only ever be accessed in inter grid operations, it's not as bad as it looks
+            foreach (var (field, grid2) in intersectingInterGridBoxes)
+            {
+                    
+                var referenceWorldPos = grid2.WorldMatrix.Translation;
+                var worldDirection = massWorldPos - referenceWorldPos;
+                var gridLocal = (Vector3D.TransformNormal(worldDirection, MatrixD.Transpose(grid2.WorldMatrix)));
+                var box = field.LocalAABB;
+                if (box.Contains(gridLocal) != ContainmentType.Contains) continue;
+                var nonTransformed = field.Sample(gridLocal, false);
+                force2 += Vector3D.TransformNormal(nonTransformed, grid2.WorldMatrix) * virtualMass;
+            }
+            grid.Physics.AddForce(MyPhysicsForceType.APPLY_WORLD_FORCE, force2, massWorldPos, null, null, false);
         }
     }
-    
 
     private static void ApplyArtificialGravityToMassBlock(IMyVirtualMass mass)
     {
@@ -191,6 +228,8 @@ public static class ForceApplicatorSystem
         
         var worldMatrix = mass.WorldMatrix;
         Vector3D pos = worldMatrix.Translation;
+        
+
         var interGravity = GravityManager.Sample(pos, (MyCubeGrid)mass.CubeGrid);
         if (interGravity == Vector3D.Zero) return;
         
